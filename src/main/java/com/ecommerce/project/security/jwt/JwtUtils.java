@@ -1,10 +1,7 @@
 package com.ecommerce.project.security.jwt;
 
 import com.ecommerce.project.security.services.UserDetailsImpl;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.Cookie;
@@ -23,110 +20,75 @@ import java.util.Date;
 
 @Component
 public class JwtUtils {
-
     private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
 
-    @Value("${spring.app.jwtExpirationMs}")
-    private long jwtExpirationMs;
     @Value("${spring.app.jwtSecret}")
     private String jwtSecret;
 
+    @Value("${spring.app.jwtExpirationMs}")
+    private int jwtExpirationMs;
+
     @Value("${spring.ecom.app.jwtCookieName}")
     private String jwtCookie;
-
-//    //getting JWT from header
-//    public String getJwtFromHeader(HttpServletRequest request) {
-//        String barerToken = request.getHeader("Authorization");
-//        logger.debug("Authorization Header: {}", barerToken);
-//        if (barerToken != null && barerToken.startsWith("Bearer ")) {
-//            return barerToken.substring(7);//this removes barer prefix
-//
-//        }
-//        return null;
-//    }
-
 
     public String getJwtFromCookies(HttpServletRequest request) {
         Cookie cookie = WebUtils.getCookie(request, jwtCookie);
         if (cookie != null) {
             return cookie.getValue();
-        }else  {
+        } else {
             return null;
         }
     }
 
     public ResponseCookie generateJwtCookie(UserDetailsImpl userPrincipal) {
-        String jwt= generateTockenFromUsername(userPrincipal.getUsername());
-        ResponseCookie cookie=ResponseCookie.from(jwtCookie,jwt)
+        String jwt = generateTokenFromUsername(userPrincipal.getUsername());
+        ResponseCookie cookie = ResponseCookie.from(jwtCookie, jwt)
                 .path("/api")
-                .maxAge(24*60*60)
+                .maxAge(24 * 60 * 60)
                 .httpOnly(false)
                 .build();
         return cookie;
     }
 
     public ResponseCookie getCleanJwtCookie() {
-        ResponseCookie cookie=ResponseCookie.from(jwtCookie,null)
+        ResponseCookie cookie = ResponseCookie.from(jwtCookie, null)
                 .path("/api")
                 .build();
         return cookie;
     }
 
-
-    //generating tocken from username
-    public String generateTockenFromUsername(String username) {
-
+    public String generateTokenFromUsername(String username) {
         return Jwts.builder()
                 .subject(username)
                 .issuedAt(new Date())
-                .expiration(new Date((new Date().getTime() + jwtExpirationMs)))
+                .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
                 .signWith(key())
                 .compact();
     }
 
-    //getting username from jwt tocken
-
-    public String getUsernameFromJwtToken(String token) {
+    public String getUserNameFromJwtToken(String token) {
         return Jwts.parser()
-                .verifyWith((SecretKey) key())
+                        .verifyWith((SecretKey) key())
                 .build().parseSignedClaims(token)
                 .getPayload().getSubject();
     }
-    //generate signing key
 
-    public Key key() {
-        logger.debug("Decoded secret key length: {}", Decoders.BASE64.decode(jwtSecret).length);
-        logger.debug("Raw secret (Base64): {}", jwtSecret);
-        logger.debug("Decoded secret (text): {}", new String(Decoders.BASE64.decode(jwtSecret)));
-
-        return Keys.hmacShaKeyFor(
-                Decoders.BASE64.decode(jwtSecret)
-        );
+    private Key key() {
+        return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
-    //validate jwt tocken
 
-    public boolean validatJwtToken(String authToken) {
+    public boolean validateJwtToken(String authToken) {
         try {
-            System.out.println("validating jwt token");
-            Jwts.parser()
-                    .verifyWith((SecretKey) key())
-                    .build()
-                    .parseSignedClaims(authToken);
+            Jwts.parser().verifyWith((SecretKey) key()).build().parseSignedClaims(authToken);
             return true;
         } catch (MalformedJwtException e) {
             logger.error("Invalid JWT token: {}", e.getMessage());
         } catch (ExpiredJwtException e) {
-
             logger.error("JWT token is expired: {}", e.getMessage());
-
         } catch (UnsupportedJwtException e) {
-
             logger.error("JWT token is unsupported: {}", e.getMessage());
-
         } catch (IllegalArgumentException e) {
-
             logger.error("JWT claims string is empty: {}", e.getMessage());
-
         }
         return false;
     }
